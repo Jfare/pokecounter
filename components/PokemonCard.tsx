@@ -1,5 +1,13 @@
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Dimensions, Image, StyleSheet, Text, View } from "react-native";
+import {
+  Dimensions,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 const { width } = Dimensions.get("window");
 const cardWidth = width / 3 - 10;
@@ -19,6 +27,8 @@ interface PokemonDetails {
 }
 
 const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
+  const router = useRouter();
+
   const [details, setDetails] = useState<PokemonDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
 
@@ -38,6 +48,12 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
     fetchDetails();
   }, [pokemon.name, pokemon.url]);
 
+  const handlePress = () => {
+    if (details) {
+      router.push(`/pokemon/${details.id}`);
+    }
+  };
+
   if (loadingDetails || !details) {
     return (
       <View style={[styles.card, styles.loadingCard]}>
@@ -47,7 +63,8 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
   }
 
   return (
-    <View style={styles.card}>
+    <Pressable style={styles.card} onPress={handlePress}>
+      {/* Pokemon-bild */}
       {details.sprites.front_default ? (
         <Image
           style={styles.image}
@@ -55,13 +72,17 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
           resizeMode="contain"
         />
       ) : (
+        // Visa en placeholder om ingen bild finns
         <View style={styles.imagePlaceholder}>
           <Text style={styles.placeholderText}>Ingen bild</Text>
         </View>
       )}
+
+      {/* Pokemon-nummer */}
       <Text style={styles.number}>#{details.id}</Text>
+      {/* Pokemon-namn */}
       <Text style={styles.name}>{pokemon.name}</Text>
-    </View>
+    </Pressable>
   );
 };
 

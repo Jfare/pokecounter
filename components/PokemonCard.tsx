@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   Pressable,
@@ -8,67 +9,103 @@ import {
   Text,
   View,
 } from "react-native";
+import { supabase } from "../utils/supabase";
 
+// Beräkning av kortens storlek.
 const { width } = Dimensions.get("window");
 const cardWidth = width / 3 - 10;
 
 interface PokemonCardProps {
-  pokemon: {
-    name: string;
-    url: string;
-  };
+  pokemonId: number;
+  pokemonName: string;
 }
 
-interface PokemonDetails {
+interface DbPokemonDetails {
   id: number;
-  sprites: {
-    front_default: string;
-  };
+  name: string;
+  height: number;
+  weight: number;
+  types: any;
+  abilities: any;
+  stats: any;
+  sprite_default: string | null;
+  sprite_official: string | null;
 }
 
-const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
+const PokemonCard: React.FC<PokemonCardProps> = ({
+  pokemonId,
+  pokemonName,
+}) => {
   const router = useRouter();
-
-  const [details, setDetails] = useState<PokemonDetails | null>(null);
+  const [details, setDetails] = useState<DbPokemonDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Hämta detaljer för den specifika Pokemon från Supabase när komponenten laddas eller ID ändras
   useEffect(() => {
-    const fetchDetails = async () => {
+    const fetchDetailsFromDb = async () => {
+      setLoadingDetails(true);
+      setError(null);
       try {
-        const response = await fetch(pokemon.url);
-        const data = await response.json();
+        const { data, error } = await supabase
+          .from("pokemons")
+          .select("*")
+          .eq("id", pokemonId)
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error("No Pokemons where found in the database.");
+
         setDetails(data);
-      } catch (error) {
-        console.error(`Kunde inte hämta detaljer för ${pokemon.name}:`, error);
+      } catch (err: any) {
+        console.error(
+          `Kunde inte hämta detaljer för ID ${pokemonId} från DB:`,
+          err
+        );
+        setError("Could not load Pokemon details.");
       } finally {
         setLoadingDetails(false);
       }
     };
 
-    fetchDetails();
-  }, [pokemon.name, pokemon.url]);
-
-  const handlePress = () => {
-    if (details) {
-      router.push(`/pokemon/${details.id}`);
+    if (pokemonId) {
+      fetchDetailsFromDb();
     }
+  }, [pokemonId]);
+
+  // Hantera klick på kortet
+  const handlePress = () => {
+    router.push(`/pokemon/${pokemonId}`);
   };
 
-  if (loadingDetails || !details) {
+  if (loadingDetails) {
     return (
       <View style={[styles.card, styles.loadingCard]}>
-        <Text>Laddar...</Text>
+        <ActivityIndicator size="small" color="#666" />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.card, styles.errorCard]}>
+        <Text style={styles.errorText}>Fel</Text>
       </View>
     );
   }
 
   return (
     <Pressable style={styles.card} onPress={handlePress}>
-      {/* Pokemon-bild */}
-      {details.sprites.front_default ? (
+      {details?.sprite_official ? (
         <Image
           style={styles.image}
-          source={{ uri: details.sprites.front_default }}
+          source={{ uri: details.sprite_official }}
+          resizeMode="contain"
+        />
+      ) : details?.sprite_default ? (
+        <Image
+          style={styles.image}
+          source={{ uri: details.sprite_default }}
           resizeMode="contain"
         />
       ) : (
@@ -79,9 +116,9 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon }) => {
       )}
 
       {/* Pokemon-nummer */}
-      <Text style={styles.number}>#{details.id}</Text>
-      {/* Pokemon-namn */}
-      <Text style={styles.name}>{pokemon.name}</Text>
+      {details?.id && <Text style={styles.number}>#{details.id}</Text>}
+      {/* Pokemon-namn - Använd namnet från details om det finns, annars från prop */}
+      <Text style={styles.name}>{details?.name || pokemonName}</Text>
     </Pressable>
   );
 };
@@ -99,9 +136,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 1.5,
+    minHeight: cardWidth + 40,
+    justifyContent: "space-between",
   },
   loadingCard: {
     justifyContent: "center",
+  },
+  errorCard: {
+    justifyContent: "center",
+    backgroundColor: "#ffcccc",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "red",
+    textAlign: "center",
   },
   image: {
     width: cardWidth - 20,

@@ -8,42 +8,123 @@ import {
   View,
 } from "react-native";
 import PokemonCard from "../../components/PokemonCard";
+import { supabase } from "../../utils/supabase";
 
-interface Pokemon {
+interface PokemonListItem {
+  id: number;
   name: string;
-  url: string;
 }
 
 export default function Page() {
-  const [pokemons, setPokemons] = useState<Pokemon[]>([]);
+  //Set states.
+  const [pokemons, setPokemons] = useState<PokemonListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(true);
   const [searchText, setSearchText] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchPokemons = async () => {
+  // Funktion för att synkronisera Pokemons med Supabase
+  const synchronizePokemons = async () => {
+    setSyncing(true);
+    setError(null);
     try {
-      const response = await fetch(
-        "https://pokeapi.co/api/v2/pokemon/?limit=151"
-      );
-      const data = await response.json();
-      setPokemons(data.results);
-    } catch (error) {
-      console.error("Kunde inte hämta Pokemons:", error);
+      // Kontrollera Supabase-tabellen.
+      const { count, error: countError } = await supabase
+        .from("pokemons")
+        .select("*", { count: "exact", head: true });
+
+      if (countError) {
+        // Vid fel, dvs tabellen är tom. Fortsätt
+        console.error(
+          "Error fetching pokemon count from Supabase:",
+          countError
+        );
+      }
+
+      const pokemonCountInDb = count ?? 0;
+
+      // Om tabellen är tom eller har färre än 151 Pokemons, hämta från API och infoga/uppdatera
+      // Går säkert att göra snyggare än att ha en massa if-satser...
+      // Denna funktion skulle antagligen behöva brytas ut till en egen klass, men jag hinner inte med det nu.
+      if (pokemonCountInDb === 0 || pokemonCountInDb < 151) {
+        console.log(
+          "Supabase pokemons table is empty or incomplete. Fetching from API..."
+        );
+        // Hämta de första 151 från PokeAPI
+        const response = await fetch(
+          "https://pokeapi.co/api/v2/pokemon/?limit=151"
+        );
+        if (!response.ok) throw new Error("Could not fetch list from PokeAPI");
+        const apiData = await response.json();
+        const apiPokemons = apiData.results;
+
+        // Hämta detaljerad info för varje Pokemon för att få ID, sprites, typer, etc.
+        const detailedPokemons = await Promise.all(
+          apiPokemons.map(async (p: { name: string; url: string }) => {
+            const detailRes = await fetch(p.url);
+            if (!detailRes.ok)
+              throw new Error(`Could not fetch details for ${p.name}`);
+            return detailRes.json();
+          })
+        );
+
+        // Förbered data för infogning/uppdatering i Supabase
+        const insertData = detailedPokemons.map((p) => ({
+          id: p.id,
+          name: p.name,
+          height: p.height,
+          weight: p.weight,
+          types: p.types,
+          abilities: p.abilities,
+          stats: p.stats,
+          sprite_default: p.sprites.front_default,
+          sprite_official:
+            p.sprites.other?.["official-artwork"]?.front_default || null,
+        }));
+
+        // Infoga eller uppdatera (upsert) data i Supabase.
+        // onConflict: 'id' säger åt Supabase att om en rad med samma 'id' redan finns, uppdatera den istället för att kasta ett fel.
+        const { error: upsertError } = await supabase
+          .from("pokemons")
+          .upsert(insertData, { onConflict: "id" });
+
+        if (upsertError) throw upsertError;
+        console.log("Supabase pokemons table synchronized.");
+      } else {
+        console.log("Supabase pokemons table already populated.");
+      }
+
+      const { data: dbPokemons, error: fetchError } = await supabase
+        .from("pokemons")
+        .select("id, name")
+        .order("id", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      setPokemons(dbPokemons as PokemonListItem[]); // Uppdatera state med data från DB
+    } catch (err: any) {
+      console.error("Synchronization or Fetching error:", err);
+      setError("Could not load Pokemons. Please try again later.");
     } finally {
+      setSyncing(false);
       setLoading(false);
     }
   };
 
+  // Använd useEffect för att köra synkroniseringen när komponenten mountas
   useEffect(() => {
-    fetchPokemons();
-  }, []);
+    synchronizePokemons();
+  }, []); // Den tomma beroende-arrayen [] gör att effekten bara körs en gång vid mount
 
-  const renderPokemonItem = ({ item }: { item: Pokemon }) => (
-    <PokemonCard pokemon={item} />
+  const renderPokemonItem = ({ item }: { item: PokemonListItem }) => (
+    <PokemonCard pokemonId={item.id} pokemonName={item.name} />
   );
 
   return (
     <View style={styles.container}>
+      {/* Header-vy */}
       <View style={styles.header}>
+        {/* Titel */}
         <Text style={styles.headerTitle}>PokeCounter</Text>
         {/* Sökruta */}
         <TextInput
@@ -55,13 +136,21 @@ export default function Page() {
         />
       </View>
 
-      {loading ? (
-        <ActivityIndicator
-          size="large"
-          color="#FF7043"
-          style={styles.loadingIndicator}
-        />
+      {/* Huvudinnehåll */}
+      {/* Visa laddnings/synkroniseringsindikator eller felmeddelande */}
+      {loading || syncing ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF7043" />
+          <Text style={styles.loadingText}>
+            {syncing ? "Synkroniserar Pokemons..." : "Laddar Pokemons..."}
+          </Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
       ) : (
+        // Visa listan med Pokemons
         <FlatList
           data={pokemons}
           renderItem={renderPokemonItem}
@@ -114,9 +203,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "space-around",
   },
-  loadingIndicator: {
+  loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: "#555",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "red",
+    textAlign: "center",
   },
 });

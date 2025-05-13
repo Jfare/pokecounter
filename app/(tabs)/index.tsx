@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import { PokemonSearch } from "@/utils/PokemonSearch";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -116,6 +117,11 @@ export default function Page() {
     synchronizePokemons();
   }, []); // Den tomma beroende-arrayen [] gör att effekten bara körs en gång vid mount
 
+  // Använd useMemo för att filtrera Pokemons baserat på söktexten
+  const filteredPokemons = useMemo(() => {
+    return PokemonSearch.filterPokemons(pokemons, searchText);
+  }, [pokemons, searchText]); // Filtrera om 'pokemons' listan eller 'searchText' ändras
+
   const renderPokemonItem = ({ item }: { item: PokemonListItem }) => (
     <PokemonCard pokemonId={item.id} pokemonName={item.name} />
   );
@@ -150,14 +156,21 @@ export default function Page() {
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : (
-        // Visa listan med Pokemons
+        // Visa listan med Pokemons om inte laddar/synkroniserar och inga fel
         <FlatList
-          data={pokemons}
+          data={filteredPokemons}
           renderItem={renderPokemonItem}
-          keyExtractor={(item) => item.name}
+          keyExtractor={(item) => item.id.toString()}
           numColumns={3}
           columnWrapperStyle={styles.row}
           contentContainerStyle={styles.listContent}
+          ListEmptyComponent={() => (
+            <View style={styles.emptyListContainer}>
+              <Text style={styles.emptyListText}>
+                Inga Pokemons matchade din sökning.
+              </Text>
+            </View>
+          )}
         />
       )}
     </View>
@@ -222,6 +235,17 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: "red",
+    textAlign: "center",
+  },
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 50,
+  },
+  emptyListText: {
+    fontSize: 18,
+    color: "#666",
     textAlign: "center",
   },
 });

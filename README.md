@@ -1,50 +1,50 @@
-# Welcome to your Expo app 👋
+# PokeCounter App!
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Det här en app som man kan skriva en kommentar om en Pokemon..
+Men det är egentligen ganska ointressant.
 
-## Get started
+Appen hämtar information om de 151 första Pokemons som fanns med då Pokemon lanserades.
 
-1. Install dependencies
+Informationen hämtas från https://pokeapi.co och lagras därefter i Supabase.
+Appen använder därefter Supabase istället för Pokeapi för att hämta data om diverse Pokemons.
 
-   ```bash
-   npm install
-   ```
+En sökfunktion har implenterats
 
-2. Start the app
+Det går även att skriva kommentarer om diverse Pokemons i form av "encounters".
+Även dessa lagras på Supabase.
 
-   ```bash
-   npx expo start
-   ```
+Här nedanför kommer en lista med funktioner som appen använder:
 
-In the output, you'll find options to open the app in a
+## Databas
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+Istället för att använda telefonens egen lagring så har jag valt att implementera Supabase som databas.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Med mera tid så hade Supabase även gett mig möjligheten att även kunna implementera ett system med olika användare och inloggning.
 
-## Get a fresh project
+Databasen har två syften i denna app.
 
-When you're ready, run:
+### SynchronizePokemons
 
-```bash
-npm run reset-project
-```
+Jag har en funktion i index.tsx som heter synchronizePokemons.
+Den kommer först att kontrollera om tabellen för Pokemons är tom eller innehåller färre än 151 Pokemons.
+Om så är fallet, kommer den göra en fetch till pokeapi.co och hämta all information, för att sedan lagra infon i Supabase.
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+På de viset kan jag sedan göra förfrågningar till min egen databas istället för att förlita mig på en API som jag själv inte kan kontrollera.
+Supabase visade sig dessutom vara betydligt snabbare än APIn, vilket gjorde att appen blev mera behaglig att använda.
 
-## Learn more
+Värt att notera för denna är att jag blev tvungen att installera och hantera ett antal beroenden som saknas i React Native.
+Dessa hanteras via filen metro.config.js
 
-To learn more about developing your project with Expo, look at the following resources:
+### Encounters
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Andra syftet är att lagra "encounters" som jag kallar det, man kan skriva kommentarer om en Pokemon.
 
-## Join the community
+Detta hanteras i PokemonDetails.tsx genom följande funktioner:
 
-Join our community of developers creating universal apps.
+fetchEncounters
+handleAddEncounterPress
+handleSaveEncounter
+setEncounter
+handleCancelEncounter
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+samt tillhörande "states"
